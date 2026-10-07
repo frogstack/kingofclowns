@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Happy Jump Calculator</title>
+<meta name="description" content="Torn City happy jump calculator: whether an ecstasy jump still pays for each of your stats, which booster gives the cheapest extra stats, and how many Xanax to stack.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single working column. Key panel on top, four stat cards (2x2, 1-up on phones),
+   then the editable setup and the API disclosure. Same "gym steel" identity as the report. */
+:root {
+  color-scheme: light;
+  --bg: #f3f5f7; --surface: #ffffff; --ink: #14181d; --ink-2: #4a535e; --muted: #7b8591;
+  --rule: #dce1e7; --accent: #b5441b; --accent-wash: #fbeee8;
+  --yes: #1f7a3a; --yes-wash: #e6f4ea; --no: #6b7480; --no-wash: #eef1f4; --err: #b42d2d;
+  --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111418; --surface: #191d22; --ink: #eceff2; --ink-2: #b7c0ca; --muted: #8a949f;
+    --rule: #2a3037; --accent: #f08155; --accent-wash: #2b1c16;
+    --yes: #4cc26e; --yes-wash: #15281b; --no: #9aa3ad; --no-wash: #1f242a; --err: #f07272;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111418; --surface: #191d22; --ink: #eceff2; --ink-2: #b7c0ca; --muted: #8a949f;
+  --rule: #2a3037; --accent: #f08155; --accent-wash: #2b1c16;
+  --yes: #4cc26e; --yes-wash: #15281b; --no: #9aa3ad; --no-wash: #1f242a; --err: #f07272;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.55; }
+.page { max-width: 1100px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: flex; flex-direction: column; gap: 22px; }
+h1, h2, h3 { font-family: var(--f-display); text-transform: uppercase; margin: 0; line-height: 1.05; text-wrap: balance; }
+h1 { font-size: clamp(2.4rem, 7vw, 3.8rem); font-weight: 800; }
+h2 { font-size: 1.7rem; font-weight: 800; }
+h3 { font-size: 1.15rem; font-weight: 600; letter-spacing: 0.04em; }
+p { margin: 0; }
+a { color: var(--accent); }
+.eyebrow { font-family: var(--f-mono); font-size: 0.75rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+.lede { color: var(--ink-2); font-size: 1.05rem; max-width: 68ch; }
+.small { font-size: 0.85rem; color: var(--ink-2); }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+input[type="text"], input[type="password"], input[type="number"] { font: inherit; font-family: var(--f-mono); color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 5px; padding: 8px 10px; min-width: 0; }
+#apiKey { flex: 1 1 220px; letter-spacing: 0.05em; }
+button { font: inherit; font-weight: 500; border-radius: 5px; padding: 8px 14px; cursor: pointer; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: 0.55; cursor: progress; }
+button:focus-visible, input:focus-visible, summary:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#status { font-family: var(--f-mono); font-size: 0.82rem; color: var(--ink-2); min-height: 1.3em; }
+#status.err { color: var(--err); }
+.banner { border-left: 3px solid var(--accent); background: var(--accent-wash); padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 0.9rem; }
+
+.how { display: block; }
+.how > summary { display: flex; align-items: center; gap: 10px; list-style: none; cursor: pointer; color: var(--ink); font-size: inherit; }
+.how > summary::-webkit-details-marker { display: none; }
+.how > summary::before { content: ""; width: 7px; height: 7px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted); transform: rotate(-45deg); transition: transform 0.15s; flex: none; }
+.how[open] > summary::before { transform: rotate(45deg); }
+.how-body { display: grid; gap: 10px; margin-top: 12px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.card-head .val { font-family: var(--f-display); font-weight: 800; font-size: 2rem; line-height: 1; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-family: var(--f-mono); font-size: 0.75rem; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 9px; border-radius: 99px; font-weight: 500; }
+.chip.yes { color: var(--yes); background: var(--yes-wash); }
+.chip.no { color: var(--no); background: var(--no-wash); }
+.chip svg { width: 12px; height: 12px; }
+.answers { display: grid; gap: 10px; }
+.answer { display: grid; grid-template-columns: 7.5rem 1fr; gap: 10px; align-items: center; padding-top: 10px; border-top: 1px solid var(--rule); }
+.answer:first-child { border-top: 0; padding-top: 0; }
+.answer .q { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.answer .a { min-width: 0; }
+.answer .a strong { font-weight: 600; }
+.answer .sub { font-size: 0.84rem; color: var(--ink-2); }
+.answer .dim { color: var(--muted); }
+details > summary { cursor: pointer; font-size: 0.88rem; color: var(--ink-2); }
+.tablewrap { overflow-x: auto; margin-top: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 0.82rem; }
+th, td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { font-family: var(--f-mono); font-size: 0.68rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+td { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+td:first-child, th:first-child { text-align: left; font-family: var(--f-body); }
+td.best { color: var(--accent); font-weight: 500; }
+td.dim { color: var(--muted); }
+tr:last-child td { border-bottom: 0; }
+
+.setup { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+fieldset { border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px 14px; margin: 0; display: grid; gap: 8px; min-width: 0; background: var(--surface); }
+legend { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0 4px; }
+.field { display: grid; grid-template-columns: 1fr 8.5rem; gap: 8px; align-items: center; }
+.field label { font-size: 0.86rem; color: var(--ink-2); }
+.field input { width: 100%; text-align: right; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 0.86rem; color: var(--ink-2); }
+.disclosure td, .disclosure th { white-space: normal; text-align: left; font-family: var(--f-body); vertical-align: top; }
+.disclosure th { width: 12rem; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header style="display:flex;flex-direction:column;gap:10px">
+    <div class="eyebrow">Torn City · gym training</div>
+    <h1>Happy Jump Calculator</h1>
+    <p class="lede">For each of your battle stats: is an ecstasy jump still worth it, which booster gets you extra stats for the least money, and how many Xanax to stack. Uses your real stats, happy, gym and perks, and today's item market prices.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="keyHead">
+    <h3 id="keyHead">Your API key</h3>
+    <div class="row">
+      <label for="apiKey" class="small" style="position:absolute;left:-9999px">Torn API key</label>
+      <input id="apiKey" type="password" autocomplete="off" spellcheck="false" placeholder="16-character Limited Access key">
+      <button id="btnShow" type="button" aria-pressed="false">Show</button>
+      <button id="btnLoad" type="button" class="primary">Save &amp; load</button>
+      <button id="btnForget" type="button">Forget key</button>
+    </div>
+    <p class="small">Needs a <strong>Limited Access</strong> key (battle stats are private). <a id="keyLink" href="https://www.torn.com/preferences.php#tab=api?step=addNewKey&amp;title=Happy%20Jump%20Calculator&amp;type=3" target="_blank" rel="noopener">Create one on Torn</a>. The key stays in this browser and is only ever sent to api.torn.com.</p>
+    <div id="status" role="status" aria-live="polite"></div>
+  </section>
+
+  <details class="panel how">
+    <summary><h3>How it works</h3></summary>
+    <div class="how-body">
+    <p class="small">Gains come from Vladar's “Training Gains Explained” v2.0 formula. Three routines are compared on the same 24-hour drug clock (Xanax ≈ 7 h, ecstasy ≈ 3.6 h of cooldown):</p>
+    <ul class="small" style="margin:0;padding-left:1.2em;display:grid;gap:4px">
+      <li><strong>Standard train:</strong> Xanax on cooldown, one points refill, natural regen, all at your normal happy.</li>
+      <li><strong>Booster jump:</strong> a day's boosters, then your full bar, refill and one Xanax at boosted happy. Uses no drug cooldown, so it never loses to a standard train.</li>
+      <li><strong>Ecstasy jump:</strong> stack 1–4 Xanax, eat boosters, take ecstasy, train the stack and a refill at doubled happy. Stacking freezes your energy regen and the ecstasy uses drug cooldown, so it only wins while doubled happy is worth more than that lost energy. The calculator tries every stack size and how many ordinary Xanax to take between jumps, and keeps the best.</li>
+    </ul>
+    <p class="small">“Works” means the ecstasy jump makes more stats per day than a booster jump with the same boosters. Overdoses lose the stack (and the boosters, for an ecstasy overdose) and stretch a Xanax cooldown to 24–25 h; happy is assumed to be restored at rehab. Prices are the cheapest item-market listings for the quantity a jump needs.</p>
+    </div>
+  </details>
+
+  <div id="exampleBanner" class="banner">Showing an <strong>example player</strong> with built-in prices from 5 Oct 2026. Load your key to see your own numbers.</div>
+
+  <section aria-labelledby="resHead" style="display:flex;flex-direction:column;gap:12px">
+    <div class="row" style="justify-content:space-between">
+      <h2 id="resHead">Your stats</h2>
+      <span class="small" id="resMeta"></span>
+    </div>
+    <p class="small">Each card assumes you put a whole day's training into that one stat. Overdoses are counted (see the assumptions below); you can switch them off.</p>
+    <div class="cards" id="cards"></div>
+  </section>
+
+  <section aria-labelledby="setupHead" style="display:flex;flex-direction:column;gap:12px">
+    <h2 id="setupHead">Your setup</h2>
+    <p class="small">Filled in from your API data where possible. Change anything and the cards update. Gym dots and gym-gain perks only change stats per day and dollars per stat; they never change whether an ecstasy jump pays.</p>
+    <div class="setup" id="setup"></div>
+  </section>
+
+  <section aria-labelledby="tosHead" class="panel">
+    <h3 id="tosHead">API key use</h3>
+    <div class="tablewrap"><table class="disclosure">
+      <tbody>
+        <tr><th>Data storage</th><td>Nothing is stored on any server. Your key and settings are saved in this browser's local storage only.</td></tr>
+        <tr><th>Data sharing</th><td>None. Requests go directly from your browser to api.torn.com.</td></tr>
+        <tr><th>Purpose of use</th><td>Personal training calculations: battle stats, bars, gym and perks for your account, plus public item and points market prices.</td></tr>
+        <tr><th>Key storage &amp; sharing</th><td>Stored in your browser until you press “Forget key”. Never shared.</td></tr>
+        <tr><th>Key access level</th><td>Limited Access (needed for battle stats).</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</div>
+
+<script>
+// ===== Happy-jump model (port of model.py) =====
+const STAT_CONSTS = { strength: [1600, 1700], speed: [1600, 2000], dexterity: [1800, 1500], defense: [2100, -600] };
+const r4 = x => Math.floor(x * 10000 + 0.5) / 10000;
+
+function trainGain(S, H, G, e, stat, mult) {
+  const [A, B] = STAT_CONSTS[stat];
+  S = Math.min(S, 5e7);
+  H = Math.max(0, Math.min(H, 99999));
+  const base = S * r4(1 + 0.07 * r4(Math.log(1 + H / 250))) + 8 * Math.pow(H, 1.05) + (1 - (H / 99999) ** 2) * A + B;
+  return base / 200000 * G * e * mult;
+}
+const happyLoss = e => (Math.round(0.4 * e) + Math.round(0.5 * e) + Math.round(0.6 * e)) / 3;
+
+function defaultSetup() {
+  return {
+    stat: "strength", G: 6, e: 10, baseHappy: 5025, mult: 1,
+    xanCd: 7, ecsCd: 215.5 / 60, regenPerH: 30, bar: 150, refill: 150,
+    xanEnergy: 250, xanHappy: 75, energyCap: 1000, boosterCapH: 24,
+    pXan: 0.03, pEcs: 0.05, xanOdCd: 24.5,
+    priceXan: 877066, priceEcs: 35281, pricePoint: 31097, refillPoints: 30,
+  };
+}
+const refillCost = st => st.refillPoints * st.pricePoint;
+
+// Train E energy starting at H0; optional one-off happy bump after `bumpAt` energy.
+function session(S, H0, E, st, bumpAt = null, bump = 0) {
+  const n = Math.round(E / st.e), loss = happyLoss(st.e);
+  let H = H0, g = 0, used = 0, bumped = false;
+  for (let i = 0; i < n; i++) {
+    if (bumpAt !== null && !bumped && used >= bumpAt) { H += bump; bumped = true; }
+    g += trainGain(S, H, st.G, st.e, st.stat, st.mult);
+    H = Math.max(0, H - loss);
+    used += st.e;
+  }
+  return [g, H];
+}
+const perEnergySession = (S, H0, E, st) => session(S, H0, E, st)[0] / E;
+
+function boostersPerJump(b, cycleH, st) {
+  const maxOne = Math.floor(st.boosterCapH / b.cd + 1e-9) + 1;
+  return Math.min(cycleH / b.cd, maxOne);
+}
+
+function noJump(S, st) {
+  const tX = st.xanCd + st.pXan * (st.xanOdCd - st.xanCd);
+  const xansDay = 24 / tX;
+  const gx = session(S, st.baseHappy + st.xanHappy, st.xanEnergy, st)[0];
+  const gRegen = perEnergySession(S, st.baseHappy, st.bar, st) * 24 * st.regenPerH;
+  const gRef = session(S, st.baseHappy, st.refill, st)[0];
+  return { stats: xansDay * (1 - st.pXan) * gx + gRegen + gRef, cost: xansDay * st.priceXan + refillCost(st) };
+}
+
+function boosterJump(S, b, st) {
+  const tX = st.xanCd + st.pXan * (st.xanOdCd - st.xanCd);
+  const xansDay = 24 / tX;
+  const nb = boostersPerJump(b, 24, st);
+  const H0 = Math.min(st.baseHappy + nb * b.happy, 99999);
+  const [gPre, Hmid] = session(S, H0, st.bar + st.refill, st);
+  const gJx = session(S, Hmid + st.xanHappy, st.xanEnergy, st)[0];
+  const gx = session(S, st.baseHappy + st.xanHappy, st.xanEnergy, st)[0];
+  const gRegen = perEnergySession(S, st.baseHappy, st.bar, st) * (24 * st.regenPerH - st.bar);
+  const stats = gPre + (1 - st.pXan) * gJx + (xansDay - 1) * (1 - st.pXan) * gx + gRegen;
+  return { stats, cost: xansDay * st.priceXan + refillCost(st) + nb * b.price, boosters: nb, happy: H0 };
+}
+
+// Cycle: m ordinary xanax -> stack N -> boosters -> ecstasy -> train stack + refill.
+function ecstasyJump(S, b, N, st, m = 0) {
+  const px = st.pXan, pe = st.pEcs;
+  const freeH = st.ecsCd + st.xanCd * m;
+  const Tnom = st.xanCd * (m + N) + st.ecsCd;
+  const regenFree = st.regenPerH * freeH;
+  const carry = Math.min(st.bar, regenFree);
+  let stack = carry + N * st.xanEnergy;
+  const preExcess = Math.max(0, stack - st.energyCap);
+  stack -= preExcess;
+  const regenBase = regenFree - carry + preExcess;
+  const refillShare = Math.min(1, Tnom / 24);
+  const nb = boostersPerJump(b, Tnom, st);
+  const Hj = Math.min(2 * (st.baseHappy + nb * b.happy), 99999);
+
+  const [gStack, Hend] = session(S, Hj, stack, st);
+  const gRefJump = session(S, Hend, st.refill, st)[0];
+  const gRefBase = session(S, st.baseHappy, st.refill, st)[0];
+  const gMx = session(S, st.baseHappy + st.xanHappy, st.xanEnergy, st)[0];
+  const gRegen = perEnergySession(S, st.baseHappy, st.bar, st) * regenBase;
+  const gJump = gStack + refillShare * gRefJump;
+
+  let Eg = 0, Et = 0, Ec = 0, alive = 1;
+  for (let i = 0; i < m; i++) {
+    Ec += alive * st.priceXan;
+    Eg += alive * (1 - px) * gMx;
+    Et += alive * (st.xanCd + px * (st.xanOdCd - st.xanCd));
+  }
+  Eg += gRegen;
+  for (let k = 1; k <= N; k++) {
+    Ec += alive * st.priceXan;
+    Et += alive * px * st.xanOdCd;
+    Eg += alive * px * refillShare * gRefBase;
+    Et += alive * (1 - px) * st.xanCd;
+    alive *= (1 - px);
+  }
+  Ec += alive * (st.priceEcs + nb * b.price);
+  Et += alive * st.ecsCd;
+  Eg += alive * (pe * refillShare * gRefBase + (1 - pe) * gJump);
+  Ec += refillShare * refillCost(st);
+  const perDay = 24 / Et;
+  return { stats: Eg * perDay, cost: Ec * perDay, N, m, cycleH: Tnom, boosters: nb, happy: Hj, stack: stack + st.refill * refillShare, perJumpBoosterCost: nb * b.price };
+}
+
+function ecstasyBest(S, b, st, Ns = [1, 2, 3, 4], ms = [0, 1, 2, 3, 4]) {
+  let best = null;
+  for (const N of Ns) for (const m of ms) {
+    const r = ecstasyJump(S, b, N, st, m);
+    if (!best || r.stats > best.stats) best = r;
+  }
+  return best;
+}
+
+// Smallest S where f-g turns negative (log scan + bisection). 0 => already negative at lo; null => never.
+function crossover(f, g, lo = 1e3, hi = 5e7, steps = 60, tol = 2e-3) {
+  const xs = Array.from({ length: steps + 1 }, (_, i) => lo * (hi / lo) ** (i / steps));
+  if (f(xs[0]) - g(xs[0]) <= 0) return 0;
+  for (let i = 1; i < xs.length; i++) {
+    if (f(xs[i]) - g(xs[i]) <= 0) {
+      let l = xs[i - 1], h = xs[i];
+      while (h / l > 1 + tol) { const mid = Math.sqrt(l * h); if (f(mid) - g(mid) > 0) l = mid; else h = mid; }
+      return Math.sqrt(l * h);
+    }
+  }
+  return null;
+}
+
+if (typeof module !== "undefined") module.exports = { trainGain, defaultSetup, noJump, boosterJump, ecstasyJump, ecstasyBest, crossover, session };
+
+
+// ===================== constants & state =====================
+const STATS = ["strength", "speed", "dexterity", "defense"];
+const LS_KEY = "hjc.apiKey", LS_SET = "hjc.settings";
+const ID_XAN = 206, ID_ECS = 197;
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+  del(k) { try { localStorage.removeItem(k); } catch (e) {} },
+};
+
+// Built-in example (prices from item pages on 5 Oct 2026). Replaced by live data when a key loads.
+const EXAMPLE = {
+  stats: { strength: 40000, speed: 90000, dexterity: 180000, defense: 600000 },
+  baseHappy: 5025, bar: 150, regenPerH: 30, gymName: "Deep Burn (example)", energyCost: 10,
+  dots: { strength: 6, speed: 6, dexterity: 6, defense: 6 },
+  priceXan: 877066, priceEcs: 35281, pricePoint: 31097,
+  boosters: [
+    { name: "Box of Extra Strong Mints", happy: 25, cd: 0.5, price: 750, candy: true },
+    { name: "Big Box of Chocolate Bars", happy: 35, cd: 0.5, price: 53975, candy: true },
+    { name: "Bag of Candy Kisses", happy: 50, cd: 0.5, price: 56213, candy: true },
+    { name: "Bag of Tootsie Rolls", happy: 75, cd: 0.5, price: 84411, candy: true },
+    { name: "Bag of Chocolate Truffles", happy: 100, cd: 0.5, price: 145085, candy: true },
+    { name: "Bag of Sherbet", happy: 150, cd: 0.5, price: 353270, candy: true },
+    { name: "Birthday Cupcake", happy: 250, cd: 0.5, price: 4051954, candy: true },
+    { name: "Erotic DVD", happy: 2500, cd: 6, price: 4352116, candy: false },
+  ],
+  perks: { general: 0, strength: 0, speed: 0, dexterity: 0, defense: 0 }, candyBonus: 0, capExtra: 0, perkNotes: [],
+};
+
+let P = JSON.parse(JSON.stringify(EXAMPLE)); // current player data
+let S = loadSettings();                       // user-adjustable assumptions
+let isExample = true;
+
+function loadSettings() {
+  const d = { odOn: true, pXan: 3, pEcs: 5, boosterCap: 24 };
+  try { return Object.assign(d, JSON.parse(store.get(LS_SET) || "{}")); } catch (e) { return d; }
+}
+const saveSettings = () => store.set(LS_SET, JSON.stringify(S));
+
+// ===================== formatting =====================
+const fmtN = v => Math.round(v).toLocaleString("en-US");
+const fmtK = v => v == null ? "beyond 50M" : v === 0 ? "below 1k" : v >= 1e6 ? (v / 1e6).toFixed(v >= 1e7 ? 0 : 2).replace(/\.?0+$/, "") + "M" : v >= 1e4 ? Math.round(v / 1e3) + "k" : (v / 1e3).toFixed(1) + "k";
+const fmtUSD = v => !isFinite(v) ? "—" : v >= 1e9 ? "$" + (v / 1e9).toFixed(2) + "B" : v >= 1e6 ? "$" + (v / 1e6).toFixed(v >= 1e8 ? 0 : 1) + "M" : v >= 1e4 ? "$" + Math.round(v / 1e3) + "k" : "$" + fmtN(v);
+const cap1 = s => s[0].toUpperCase() + s.slice(1);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+function routineLabel(r) {
+  if (r.kind === "BJ") return "Booster jump";
+  return r.m ? `${r.N}× Xanax stack (+${r.m} normal)` : `${r.N}× Xanax stack`;
+}
+function stackSentence(r) {
+  const every = `one jump every ~${Math.round(r.cycleH)} h`;
+  if (r.m) return `Take ${r.m} Xanax normally, then stack ${r.N} and jump (${every}).`;
+  return `Stack ${r.N} Xanax, then jump (${every}).`;
+}
+
+// ===================== status =====================
+const $ = id => document.getElementById(id);
+function status(msg, err = false) { const s = $("status"); s.textContent = msg; s.className = err ? "err" : ""; }
+
+// ===================== Torn API =====================
+class ApiError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
+async function api(path, key) {
+  const r = await fetch("https://api.torn.com/v2" + path, { headers: { Authorization: "ApiKey " + key } });
+  if (!r.ok) throw new ApiError(-1, `Torn API returned HTTP ${r.status}`);
+  const j = await r.json();
+  if (j.error) throw new ApiError(j.error.code, j.error.error);
+  return j;
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function apiMessage(e) {
+  const c = e.code;
+  if (c === 2) return "Torn says that key is incorrect. Check it was copied in full.";
+  if (c === 16) return "That key's access level is too low. Battle stats need a Limited Access key.";
+  if (c === 5) return "Too many requests on this key in the last minute. Wait a minute and press Save & load again.";
+  if (c === 13 || c === 18) return "That key is disabled or paused on Torn. Re-enable it in your Torn API settings.";
+  if (c === 10) return "Torn won't answer API calls while the key owner is in federal jail.";
+  if (c === -1 || e instanceof TypeError) return "Couldn't reach api.torn.com. Check your connection and try again.";
+  return `Torn API error ${c}: ${e.message}`;
+}
+
+// Cost of buying `qty` from a listing set, cheapest first. Returns per-unit average.
+function unitCost(listings, qty) {
+  let left = qty, spent = 0;
+  for (const l of listings) { const take = Math.min(left, l.amount ?? l.quantity ?? 1); spent += take * (l.price ?? l.cost); left -= take; if (left <= 0) break; }
+  if (left > 0) return null;
+  return spent / qty;
+}
+function parseBoosterEffect(effect) {
+  if (!effect || /refills energy/i.test(effect)) return null;
+  const h = effect.match(/happiness by ([\d,]+)/i);
+  const c = effect.match(/booster cooldown by ([\d.]+) (minute|hour)/i);
+  if (!h || !c) return null;
+  return { happy: +h[1].replace(/,/g, ""), cd: c[2].toLowerCase().startsWith("hour") ? +c[1] : +c[1] / 60 };
+}
+function parsePerks(perks) {
+  const out = { general: 0, strength: 0, speed: 0, dexterity: 0, defense: 0 }, notes = [];
+  let candyBonus = 0, capExtra = 0;
+  for (const [src, list] of Object.entries(perks || {})) for (const s of list || []) {
+    let m;
+    if ((m = s.match(/^\+\s*([\d.]+)%\s+(strength|speed|dexterity|defense)\s+gym gains/i))) { out[m[2].toLowerCase()] += +m[1]; notes.push(`${s} (${src})`); }
+    else if ((m = s.match(/^\+\s*([\d.]+)%\s+gym gains/i))) { out.general += +m[1]; notes.push(`${s} (${src})`); }
+    else if (/candy/i.test(s) && (m = s.match(/([\d.]+)%/))) { candyBonus += +m[1]; notes.push(`${s} (${src})`); }
+    else if (/booster cooldown/i.test(s) && (m = s.match(/([\d.]+)\s*hours?/i)) && !/reduc/i.test(s)) { capExtra += +m[1]; notes.push(`${s} (${src})`); }
+  }
+  return { perks: out, candyBonus, capExtra, notes };
+}
+
+async function loadLive(key) {
+  const btn = $("btnLoad"); btn.disabled = true;
+  try {
+    status("Checking key…");
+    const bs = (await api("/user/battlestats", key)).battlestats;
+    status("Reading your bars, gym and perks…");
+    const [bars, gymRes, perksRes, gyms] = await Promise.all([api("/user/bars", key), api("/user/gym", key), api("/user/perks", key), api("/torn/gyms", key)]);
+    status("Reading item lists…");
+    const [candy, boost] = await Promise.all([api("/torn/items?cat=Candy", key), api("/torn/items?cat=Booster", key)]);
+
+    const next = JSON.parse(JSON.stringify(EXAMPLE));
+    STATS.forEach(s => next.stats[s] = bs[s].value);
+    next.baseHappy = bars.bars.happy.maximum;
+    next.bar = bars.bars.energy.maximum;
+    next.regenPerH = bars.bars.energy.increment / bars.bars.energy.interval * 3600;
+    const g = (gyms.gyms || []).find(x => x.id === gymRes.gym.id);
+    if (g) { next.gymName = g.name; next.energyCost = g.energy_cost; STATS.forEach(s => next.dots[s] = g.modifiers[s] || 0); }
+    const pp = parsePerks(perksRes.perks);
+    next.perks = pp.perks; next.candyBonus = pp.candyBonus; next.capExtra = pp.capExtra; next.perkNotes = pp.notes;
+
+    // candidate boosters from live item data
+    const cands = [];
+    for (const it of [...(candy.items || []), ...(boost.items || [])]) {
+      const p = parseBoosterEffect(it.effect);
+      if (!p) continue;
+      cands.push({ id: it.id, name: it.name, happy: p.happy, cd: p.cd, candy: it.type === "Candy" || (candy.items || []).some(c => c.id === it.id), mv: it.value?.market_price || 0 });
+    }
+    const all = [{ id: ID_XAN, qty: 4 }, { id: ID_ECS, qty: 1 }, ...cands.map(c => ({ id: c.id, qty: Math.floor(24 / c.cd) + 1 }))];
+    const prices = {};
+    for (let i = 0; i < all.length; i++) {
+      status(`Reading market prices ${i + 1}/${all.length}…`);
+      try {
+        const r = await api(`/market/${all[i].id}/itemmarket?limit=40`, key);
+        prices[all[i].id] = unitCost(r.itemmarket.listings || [], all[i].qty);
+      } catch (e) { if (e.code === 5) { await sleep(2000); i--; continue; } prices[all[i].id] = null; }
+      await sleep(120);
+    }
+    const pm = (await api("/market/pointsmarket", key)).pointsmarket || [];
+    const ptsArr = Array.isArray(pm) ? pm : Object.values(pm);
+    next.pricePoint = unitCost(ptsArr.map(x => ({ price: x.cost, amount: x.quantity })).sort((a, b) => a.price - b.price), 30) || EXAMPLE.pricePoint;
+    next.priceXan = prices[ID_XAN] || EXAMPLE.priceXan;
+    next.priceEcs = prices[ID_ECS] || EXAMPLE.priceEcs;
+
+    // cheapest buyable item in each happy tier (per-tier key = happy & cooldown)
+    const tiers = {};
+    for (const c of cands) {
+      const price = prices[c.id] ?? (c.mv > 0 ? c.mv : null);
+      if (!price) continue;
+      const k = c.happy + "|" + c.cd;
+      if (!tiers[k] || price < tiers[k].price) tiers[k] = { name: c.name, happy: c.happy, cd: c.cd, price, candy: c.candy };
+    }
+    next.boosters = Object.values(tiers).sort((a, b) => a.happy / a.cd - b.happy / b.cd);
+    if (!next.boosters.length) next.boosters = EXAMPLE.boosters;
+
+    P = next; isExample = false;
+    $("exampleBanner").hidden = true;
+    $("resMeta").textContent = `Live data · ${new Date().toLocaleString()}`;
+    status(`Loaded. ${next.boosters.length} booster tiers priced from the item market.`);
+    renderSetup(); recompute();
+  } catch (e) {
+    status(apiMessage(e), true);
+  } finally { btn.disabled = false; }
+}
+
+// ===================== model wiring =====================
+function setupFor(stat) {
+  const st = defaultSetup();
+  st.stat = stat;
+  st.baseHappy = P.baseHappy; st.bar = P.bar; st.refill = P.bar; st.regenPerH = P.regenPerH;
+  st.e = P.energyCost || 10;
+  st.G = P.dots[stat] > 0 ? P.dots[stat] : 1;
+  st.mult = 1 + (P.perks.general + (P.perks[stat] || 0)) / 100;
+  st.boosterCapH = +S.boosterCap + (P.capExtra || 0);
+  st.pXan = S.odOn ? S.pXan / 100 : 0;
+  st.pEcs = S.odOn ? S.pEcs / 100 : 0;
+  st.priceXan = P.priceXan; st.priceEcs = P.priceEcs; st.pricePoint = P.pricePoint;
+  return st;
+}
+function boosterList() {
+  const mult = 1 + (P.candyBonus || 0) / 100;
+  return P.boosters.map(b => Object.assign({}, b, { happy: b.candy ? b.happy * mult : b.happy }));
+}
+
+function analyse(stat) {
+  const st = setupFor(stat), Sv = P.stats[stat];
+  const nj = noJump(Sv, st);
+  const rows = boosterList().map(b => {
+    const bj = Object.assign(boosterJump(Sv, b, st), { kind: "BJ" });
+    const ej = Object.assign(ecstasyBest(Sv, b, st), { kind: "EJ" });
+    const best = ej.stats > bj.stats ? ej : bj;
+    const extra = best.stats - nj.stats;
+    return { b, bj, ej, best, ecsWorks: ej.stats > bj.stats, extra, perExtra: extra > 0 ? (best.cost - nj.cost) / extra : Infinity, ceiling: undefined };
+  });
+  // lowest tier (least happy per jump) where the ecstasy still wins
+  const byHappy = [...rows].sort((a, b) => boostersPerJump(a.b, 24, st) * a.b.happy - boostersPerJump(b.b, 24, st) * b.b.happy);
+  const lowest = byHappy.find(r => r.ecsWorks) || null;
+  const value = rows.filter(r => isFinite(r.perExtra)).sort((a, b) => a.perExtra - b.perExtra)[0] || null;
+  const most = [...rows].sort((a, b) => b.best.stats - a.best.stats)[0];
+  return { stat, st, S: Sv, nj, rows, lowest, value, most, byHappy };
+}
+
+// ===================== rendering =====================
+const ICON_YES = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5l2.5 2.5L10 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const ICON_NO = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+
+function cardHTML(A) {
+  const noGym = !(P.dots[A.stat] > 0);
+  const yes = !!A.lowest;
+  const ej = yes ? A.lowest.ej : null;
+  const q1 = yes ? `<span class="chip yes">${ICON_YES}Yes</span>` : `<span class="chip no">${ICON_NO}No</span>`;
+  const q2 = yes ? esc(A.lowest.b.name) : `<span class="dim">—</span>`;
+  const q3 = yes ? `${ej.N} Xanax` : `<span class="dim">—</span>`;
+  const q4 = yes ? `<span class="dim" data-until="${A.stat}">…</span>` : `<span class="dim">—</span>`;
+  const v = A.value;
+
+  const rowsHTML = A.rows.map((r, ri) => `<tr>
+      <td>${esc(r.b.name)} <span class="dim">(${fmtN(r.b.happy)})</span></td>
+      <td>${routineLabel(r.best)}</td>
+      <td>${noGym ? "—" : fmtN(r.best.stats)}</td>
+      <td>+${(r.extra / A.nj.stats * 100).toFixed(1)}%</td>
+      <td>${fmtUSD(r.best.cost)}</td>
+      <td class="${v && r === v ? "best" : ""}">${noGym ? "—" : fmtUSD(r.perExtra)}</td>
+      <td data-ceil-cell="${A.stat}|${ri}" class="dim">…</td></tr>`).join("");
+
+  return `<article class="card" aria-label="${cap1(A.stat)}">
+    <div class="card-head"><div><div class="eyebrow">${cap1(A.stat)}</div><div class="val">${fmtN(A.S)}</div></div></div>
+    <div class="answers">
+      <div class="answer"><div class="q">Ecstasy?</div><div class="a">${q1}</div></div>
+      <div class="answer"><div class="q">Min. booster</div><div class="a">${q2}</div></div>
+      <div class="answer"><div class="q">Use until</div><div class="a">${q4}</div></div>
+      <div class="answer"><div class="q">Stack</div><div class="a">${q3}</div></div>
+    </div>
+    <details><summary>All boosters for ${A.stat}</summary>
+      ${noGym ? `<p class="small" style="color:var(--err);margin-top:6px">Your current gym can't train ${A.stat}, so stats/day and costs need its dots set below. The answers above don't depend on the gym.</p>` : ""}
+      <div class="tablewrap"><table>
+        <thead><tr><th>Booster (happy)</th><th>Best routine</th><th>Stats/day</th><th>vs standard train</th><th>Cost/day</th><th>$ / extra stat</th><th>Ecstasy pays until</th></tr></thead>
+        <tbody>${rowsHTML}</tbody>
+      </table></div>
+      <p class="small" style="margin-top:6px">Standard train: ${noGym ? "—" : fmtN(A.nj.stats) + " stats/day at " + fmtUSD(A.nj.cost / A.nj.stats) + " per stat"}. “$ / extra stat” = extra cost ÷ extra stats compared with a standard train.</p>
+    </details>
+  </article>`;
+}
+
+let ceilJob = 0;
+function recompute() {
+  const analyses = STATS.map(analyse);
+  $("cards").innerHTML = analyses.map(cardHTML).join("");
+  // ceilings are slower; fill them in after paint, one stat at a time
+  const job = ++ceilJob;
+  const queue = [];
+  analyses.forEach(A => { if (A.lowest) queue.push([A, A.lowest, -1]); });
+  analyses.forEach(A => A.rows.forEach((r, ri) => queue.push([A, r, ri])));
+  (function step() {
+    if (job !== ceilJob || !queue.length) return;
+    const t0 = performance.now();
+    while (queue.length && performance.now() - t0 < 30) {
+      const [A, r, ri] = queue.shift();
+      const st = A.st, b = r.b;
+      if (ri === -1) {
+        const u = crossover(x => ecstasyBest(x, b, st).stats, x => boosterJump(x, b, st).stats, Math.max(1e3, A.S));
+        const el = document.querySelector(`[data-until="${A.stat}"]`);
+        if (el) { el.textContent = `${u && u < 1e6 ? (u / 1e3).toFixed(1).replace(/\.0$/, "") + "k" : fmtK(u)} ${A.stat}`; el.className = ""; }
+        continue;
+      }
+      const c = crossover(x => ecstasyBest(x, b, st).stats, x => boosterJump(x, b, st).stats);
+      const key = `${A.stat}|${ri}`;
+      const cell = document.querySelector(`[data-ceil-cell="${CSS.escape(key)}"]`);
+      if (cell) { cell.textContent = c === 0 ? "never" : fmtK(c); cell.className = c && c > A.S ? "" : "dim"; }
+    }
+    setTimeout(step, 0);
+  })();
+}
+
+function field(id, label, value, opts = {}) {
+  return `<div class="field"><label for="${id}">${label}</label><input id="${id}" type="number" value="${value}" step="${opts.step ?? "any"}" min="${opts.min ?? 0}" inputmode="decimal"></div>`;
+}
+function renderSetup() {
+  const statsF = STATS.map(s => field("st_" + s, cap1(s), P.stats[s], { step: 1 })).join("");
+  const dotsF = STATS.map(s => field("dot_" + s, cap1(s) + " dots", P.dots[s], { step: 0.1 })).join("");
+  const perkF = [field("pk_general", "All stats", P.perks.general, { step: 0.5 }), ...STATS.map(s => field("pk_" + s, cap1(s), P.perks[s], { step: 0.5 }))].join("");
+  const boostF = P.boosters.map((b, i) => field("bp_" + i, `${esc(b.name)} (${fmtN(b.happy)})`, Math.round(b.price), { step: 1 })).join("");
+  $("setup").innerHTML = `
+    <fieldset><legend>Battle stats</legend>${statsF}</fieldset>
+    <fieldset><legend>Happy &amp; energy</legend>
+      ${field("baseHappy", "Max happy (property)", P.baseHappy, { step: 1 })}
+      ${field("bar", "Max energy", P.bar, { step: 1 })}
+      ${field("regen", "Energy regen per hour", P.regenPerH, { step: 1 })}
+      ${field("boosterCap", "Booster cooldown cap (h)", S.boosterCap + (P.capExtra || 0), { step: 1 })}
+      ${field("candyBonus", "Candy happy bonus (%)", P.candyBonus, { step: 1 })}
+    </fieldset>
+    <fieldset><legend>Gym · ${esc(P.gymName)}</legend>${dotsF}${field("ecost", "Energy per train", P.energyCost, { step: 5 })}</fieldset>
+    <fieldset><legend>Gym gain perks (%)</legend>${perkF}
+      ${P.perkNotes.length ? `<p class="small">Found: ${P.perkNotes.map(esc).join("; ")}</p>` : ""}</fieldset>
+    <fieldset><legend>Overdoses</legend>
+      <label class="check"><input id="odOn" type="checkbox" ${S.odOn ? "checked" : ""}> Count overdoses</label>
+      ${field("pXan", "Xanax overdose chance (%)", S.pXan, { step: 0.5 })}
+      ${field("pEcs", "Ecstasy overdose chance (%)", S.pEcs, { step: 0.5 })}
+      <p class="small">Xanax 3% is the TornStats guide figure. No sourced ecstasy rate exists; 5% is an assumption. A higher ecstasy rate lowers every ceiling.</p>
+    </fieldset>
+    <fieldset><legend>Prices ($)</legend>
+      ${field("priceXan", "Xanax", Math.round(P.priceXan), { step: 1 })}
+      ${field("priceEcs", "Ecstasy", Math.round(P.priceEcs), { step: 1 })}
+      ${field("pricePoint", "Point (refill = 30)", Math.round(P.pricePoint), { step: 1 })}
+      ${boostF}
+    </fieldset>`;
+  $("setup").querySelectorAll("input").forEach(inp => inp.addEventListener("change", onSetupChange));
+}
+function num(id, fallback) { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : fallback; }
+function onSetupChange() {
+  STATS.forEach(s => { P.stats[s] = Math.max(1, num("st_" + s, P.stats[s])); P.dots[s] = num("dot_" + s, P.dots[s]); P.perks[s] = num("pk_" + s, P.perks[s]); });
+  P.perks.general = num("pk_general", P.perks.general);
+  P.baseHappy = Math.max(1, num("baseHappy", P.baseHappy));
+  P.bar = Math.max(5, num("bar", P.bar));
+  P.regenPerH = num("regen", P.regenPerH);
+  P.energyCost = Math.max(5, num("ecost", P.energyCost));
+  P.candyBonus = num("candyBonus", P.candyBonus);
+  P.capExtra = 0; S.boosterCap = Math.max(0.5, num("boosterCap", S.boosterCap));
+  S.odOn = $("odOn").checked; S.pXan = Math.min(100, num("pXan", S.pXan)); S.pEcs = Math.min(100, num("pEcs", S.pEcs));
+  P.priceXan = num("priceXan", P.priceXan); P.priceEcs = num("priceEcs", P.priceEcs); P.pricePoint = num("pricePoint", P.pricePoint);
+  P.boosters.forEach((b, i) => b.price = num("bp_" + i, b.price));
+  saveSettings(); recompute();
+}
+
+// ===================== key panel =====================
+$("btnShow").addEventListener("click", e => {
+  const inp = $("apiKey"), show = inp.type === "password";
+  inp.type = show ? "text" : "password"; e.currentTarget.textContent = show ? "Hide" : "Show"; e.currentTarget.setAttribute("aria-pressed", String(show));
+});
+$("btnLoad").addEventListener("click", () => {
+  const key = $("apiKey").value.trim();
+  if (!/^[A-Za-z0-9]{16}$/.test(key)) { status("Torn API keys are 16 letters and numbers. Paste the whole key.", true); return; }
+  store.set(LS_KEY, key); loadLive(key);
+});
+$("apiKey").addEventListener("keydown", e => { if (e.key === "Enter") $("btnLoad").click(); });
+$("btnForget").addEventListener("click", () => {
+  store.del(LS_KEY); $("apiKey").value = "";
+  P = JSON.parse(JSON.stringify(EXAMPLE)); isExample = true;
+  $("exampleBanner").hidden = false; $("resMeta").textContent = "";
+  status("Key removed from this browser."); renderSetup(); recompute();
+});
+
+// ===================== boot =====================
+renderSetup(); recompute();
+const saved = store.get(LS_KEY);
+if (saved) { $("apiKey").value = saved; loadLive(saved); }
+</script>
+</body>
+</html>
