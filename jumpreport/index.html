@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
-/* Layout: one reading column (~68ch) on a cool "gym steel" ground; charts and
+/* Layout: one reading column (~68ch of body text) on a cool "gym steel" ground; charts and
    tables break out to a wider measure. Display face only for headings and the
    big ceiling numbers; Plex for prose; Plex Mono for every number in a column. */
 :root {
@@ -29,7 +29,7 @@
   --f-display: "Big Shoulders Display", "Arial Narrow", Impact, sans-serif;
   --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
-  --measure: 68ch;
+  --measure: 41rem; /* ~68ch of body text; rem so every element shares one column */
   --wide: 1080px;
 }
 @media (prefers-color-scheme: dark) {
