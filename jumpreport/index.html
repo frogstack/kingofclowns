@@ -135,13 +135,14 @@ html, body { margin: 0; }
   <h1>When to stop jumping</h1>
   <p class="lede">A first-principles model of three training routines — standard train, booster jump and ecstasy jump — for a donator with a maxed Private Island (5,025 happy). Overdoses are counted throughout. It finds the stat level where the ecstasy stops paying for itself, for every tier of candy and for eDVDs.</p>
   <nav class="toc" aria-label="Sections">
-    <a href="#verdict">Verdict</a><a href="#definitions">Definitions</a><a href="#setup">Setup</a><a href="#derivation">Derivation</a><a href="#booster">Booster jumps</a><a href="#ecstasy">Ecstasy jumps</a><a href="#boosters">Booster comparison</a><a href="#dollars">Dollars per stat</a><a href="#race">Race to 400k</a><a href="#overdose">Overdoses</a><a href="#sensitivity">Sensitivity</a><a href="#sources">Sources</a>
+    <a href="#ceilings">Ceilings</a><a href="#definitions">Definitions</a><a href="#setup">Setup</a><a href="#derivation">Derivation</a><a href="#booster">Booster jumps</a><a href="#ecstasy">Ecstasy jumps</a><a href="#boosters">Booster comparison</a><a href="#dollars">Dollars per stat</a><a href="#race">Race to 400k</a><a href="#overdose">Overdoses</a><a href="#sensitivity">Sensitivity</a><a href="#sources">Sources</a>
   </nav>
 </header>
 
-<section id="verdict">
-  <h3 style="margin-top:8px">Ecstasy jump ceilings, strength</h3>
-  <p class="small">The stat where the best ecstasy jump falls below the booster jump that uses the same boosters (the ecstasy's cooldown spent on Xanax instead). Overdoses counted (Xanax 3%, ecstasy 5%). Grey line: the same ceiling with no overdoses.</p>
+<section id="ceilings">
+  <div class="eyebrow">The answer</div>
+  <h2>Ecstasy jump ceilings</h2>
+  <p class="small">For strength: the stat where the best ecstasy jump falls below the booster jump that uses the same boosters (the ecstasy's cooldown spent on Xanax instead). Overdoses counted (Xanax 3%, ecstasy 5%). Grey line: the same ceiling with no overdoses.</p>
   <div class="ceilings wide" id="ceilTiles"></div>
   <p class="small">Above the ceiling, keep the boosters and drop the ecstasy. The booster jump never falls below a standard train.</p>
 </section>
@@ -288,7 +289,7 @@ G = gym dots (6.0 at Deep Burn).  S is capped at 50M, H at 99,999 inside the for
     <p class="chart-cap">Strength against days, starting from 10,000. Dashed line: standard trains all the way.</p>
   </div>
   <div class="tablewrap wide"><table id="tblRace"></table></div>
-  <p class="small">Strategies 2–4 stack 3 Xanax every jump whatever the stat. Strategies 5 and 6 pick the best stack size at each stat and switch at the ceilings in the verdict panel. Strategy 7 is the fastest plan the model found that doesn't need Birthday Cupcakes. The same plan with cupcakes reaches 400k in 21.1 days but costs $3.9B. “$ per day saved” is the extra spend over strategy 1 divided by the days saved.</p>
+  <p class="small">Strategies 2–4 stack 3 Xanax every jump whatever the stat. Strategies 5 and 6 pick the best stack size at each stat and switch at the <a href="#ceilings">ceilings</a>. Strategy 7 is the fastest plan the model found that doesn't need Birthday Cupcakes. The same plan with cupcakes reaches 400k in 21.1 days but costs $3.9B. “$ per day saved” is the extra spend over strategy 1 divided by the days saved.</p>
   <h3>Strategy 6, step by step</h3>
   <div class="tablewrap wide"><table id="tblMinMax"></table></div>
   <h3>What the race shows</h3>
