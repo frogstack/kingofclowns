@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Happy Jump Calculator</title>
-<meta name="description" content="Torn City happy jump calculator: whether an ecstasy jump still pays for each of your stats, which booster gives the cheapest extra stats, and how many Xanax to stack.">
+<title>Jump Calculator</title>
+<meta name="description" content="Torn City jump calculator: whether an ecstasy jump still pays for each of your stats, which booster gives the cheapest extra stats, and how many Xanax to stack.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
@@ -110,7 +110,7 @@ legend { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.1em; 
 <div class="page">
   <header style="display:flex;flex-direction:column;gap:10px">
     <div class="eyebrow">Torn City · gym training</div>
-    <h1>Happy Jump Calculator</h1>
+    <h1>Jump Calculator</h1>
     <p class="lede">For each of your battle stats: is an ecstasy jump still worth it, which booster gets you extra stats for the least money, and how many Xanax to stack. Uses your real stats, happy, gym and perks, and today's item market prices.</p>
   </header>
 
@@ -123,7 +123,7 @@ legend { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.1em; 
       <button id="btnLoad" type="button" class="primary">Save &amp; load</button>
       <button id="btnForget" type="button">Forget key</button>
     </div>
-    <p class="small">Needs a <strong>Limited Access</strong> key (battle stats are private). <a id="keyLink" href="https://www.torn.com/preferences.php#tab=api?step=addNewKey&amp;title=Happy%20Jump%20Calculator&amp;type=3" target="_blank" rel="noopener">Create one on Torn</a>. The key stays in this browser and is only ever sent to api.torn.com.</p>
+    <p class="small">Needs a <strong>Limited Access</strong> key (battle stats are private). <a id="keyLink" href="https://www.torn.com/preferences.php#tab=api?step=addNewKey&amp;title=kingofclowns%20jump%20calculator&amp;type=3" target="_blank" rel="noopener">Create one on Torn</a>. The key stays in this browser and is only ever sent to api.torn.com.</p>
     <div id="status" role="status" aria-live="polite"></div>
   </section>
 
@@ -172,7 +172,7 @@ legend { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.1em; 
 </div>
 
 <script>
-// ===== Happy-jump model (port of model.py) =====
+// ===== Jump model (port of model.py) =====
 const STAT_CONSTS = { strength: [1600, 1700], speed: [1600, 2000], dexterity: [1800, 1500], defense: [2100, -600] };
 const r4 = x => Math.floor(x * 10000 + 0.5) / 10000;
 
