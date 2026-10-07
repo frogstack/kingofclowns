@@ -228,7 +228,7 @@ G = gym dots (6.0 at Deep Burn).  S is capped at 50M, H at 99,999 inside the for
 <section id="booster">
   <div class="eyebrow">Strategy 2</div>
   <h2>Booster jumps never lose</h2>
-  <p>A booster jump costs no drug cooldown and no regen, so it is a strict improvement on a standard train at every stat level, as you expected. Its edge shrinks in percentage terms as your stats grow, because the stat term swamps the happy term.</p>
+  <p>A booster jump costs no drug cooldown and no regen, so it is a strict improvement on a standard train at every stat level. Its edge shrinks in percentage terms as your stats grow, because the stat term swamps the happy term.</p>
   <div class="box wide">
     <div class="chartbox"><canvas id="chBJ" aria-label="Booster jump extra stats per day over a standard train, percent, by booster"></canvas></div>
     <p class="chart-cap">Extra stats per day over a standard train, in percent, for a daily booster jump with each booster. Overdoses counted.</p>
@@ -288,7 +288,7 @@ G = gym dots (6.0 at Deep Burn).  S is capped at 50M, H at 99,999 inside the for
     <p class="chart-cap">Strength against days, starting from 10,000. Dashed line: standard trains all the way.</p>
   </div>
   <div class="tablewrap wide"><table id="tblRace"></table></div>
-  <p class="small">Strategies 2–4 stack 3 Xanax every jump whatever the stat. Strategies 5 and 6 pick the best stack size at each stat and switch at the ceilings in the verdict panel. Strategy 7 wasn't on the original list: it's the fastest plan the model found that doesn't need Birthday Cupcakes. The same plan with cupcakes reaches 400k in 21.1 days but costs $3.9B. “$ per day saved” is the extra spend over strategy 1 divided by the days saved.</p>
+  <p class="small">Strategies 2–4 stack 3 Xanax every jump whatever the stat. Strategies 5 and 6 pick the best stack size at each stat and switch at the ceilings in the verdict panel. Strategy 7 is the fastest plan the model found that doesn't need Birthday Cupcakes. The same plan with cupcakes reaches 400k in 21.1 days but costs $3.9B. “$ per day saved” is the extra spend over strategy 1 divided by the days saved.</p>
   <h3>Strategy 6, step by step</h3>
   <div class="tablewrap wide"><table id="tblMinMax"></table></div>
   <h3>What the race shows</h3>
@@ -303,7 +303,7 @@ G = gym dots (6.0 at Deep Burn).  S is capped at 50M, H at 99,999 inside the for
   <div class="eyebrow">Risk</div>
   <h2>Overdoses</h2>
   <p>An overdose wipes energy and happy. For a stacked jump that's the whole stack, and an ecstasy overdose also throws away the boosters you just ate. I couldn't find a sourced per-use rate for ecstasy. Hank's training guide on TornStats treats Xanax as 3% per use, and the Torn wiki only says ecstasy's chance is relatively high. So every headline number assumes Xanax 3% and ecstasy 5%, and the table below shows how the ceiling moves as the ecstasy rate changes.</p>
-  <p>What's counted: the energy lost, the drug used, the boosters lost on an ecstasy overdose, and the longer 24–25 h cooldown after a Xanax overdose. Hospital time is assumed to be revived or spent stacking. Happy is restored at rehab for next to nothing, so it costs nothing lasting.</p>
+  <p>What's counted: the energy lost, the drug used, the boosters lost on an ecstasy overdose, and the longer 24–25 h cooldown after a Xanax overdose. Hospital time is assumed to be revived, price not counted. Happy is restored at rehab for next to nothing, so it costs nothing lasting.</p>
   <div class="tablewrap wide"><table id="tblODRate"></table></div>
   <p class="small">Ceiling vs booster jump, strength, Xanax fixed at 3%. Even a 0% ecstasy rate drops the ceilings by 20–30% from the no-overdose column, because a Xanax overdose mid-stack loses everything stacked so far.</p>
 </section>
