@@ -98,8 +98,12 @@ tr:last-child td { border-bottom: 0; }
 fieldset { border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px 14px; margin: 0; display: grid; gap: 8px; min-width: 0; background: var(--surface); }
 legend { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); padding: 0 4px; }
 .field { display: grid; grid-template-columns: 1fr 8.5rem; gap: 8px; align-items: center; }
+.field:has(select) { grid-template-columns: 1fr 12rem; }
 .field label { font-size: 0.86rem; color: var(--ink-2); }
 .field input { width: 100%; text-align: right; }
+.field select { font: inherit; font-size: 0.86rem; color: var(--ink); background: var(--bg); border: 1px solid var(--rule); border-radius: 5px; padding: 7px 8px; min-width: 0; width: 100%; }
+fieldset button { justify-self: start; }
+.answer .a .sub { display: block; margin-top: 4px; }
 .check { display: flex; gap: 8px; align-items: center; font-size: 0.86rem; color: var(--ink-2); }
 .disclosure td, .disclosure th { white-space: normal; text-align: left; font-family: var(--f-body); vertical-align: top; }
 .disclosure th { width: 12rem; }
@@ -138,8 +142,9 @@ legend { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.1em; 
       <li><strong>Booster jump:</strong> a day's boosters, then your full bar, refill and one Xanax at boosted happy. Uses no drug cooldown, so it never loses to a standard train.</li>
       <li><strong>Ecstasy jump:</strong> stack 1–4 Xanax, eat boosters, take ecstasy, train the stack and a refill at doubled happy. Stacking freezes your energy regen and the ecstasy uses drug cooldown, so it only wins while doubled happy is worth more than that lost energy. The calculator tries every stack size and how many ordinary Xanax to take between jumps, and keeps the best.</li>
     </ul>
-    <p class="small">“Works” means the ecstasy jump makes more stats per day than a booster jump with the same boosters. Overdoses lose the stack (and the boosters, for an ecstasy overdose) and stretch a Xanax cooldown to 24–25 h; happy is assumed to be restored at rehab. Prices are the cheapest item-market listings for the quantity a jump needs.</p>
-    <p class="small">Want all the nerdy details? The <a href="/jumpreport/">full jump report</a> shows the formula, the energy budgets and every breakeven.</p>
+    <p class="small"><strong>Gym progress counts.</strong> Every energy you train is also a point of gym XP, and better gyms multiply everything you train afterwards. So energy an ecstasy jump gives up costs future stats as well as today's. From your gym, your progress and your build, the calculator finds the move that gets each stat furthest in the long run, counting every gym upgrade up to George's. In the low gyms that rules out most ecstasy jumps; at George's it makes no difference.</p>
+    <p class="small">“Pays” means an ecstasy jump beats a booster jump with the same boosters once the gym progress it gives up is counted. Overdoses lose the stack (and the boosters, for an ecstasy overdose) and stretch a Xanax cooldown to 24–25 h; happy is assumed to be restored at rehab. Prices are the cheapest item-market listings for the quantity a jump needs.</p>
+    <p class="small">Want all the nerdy details? The <a href="/jumpreport/">full jump report</a> shows the formula, the energy budgets, how gym progress is valued and every breakeven.</p>
     </div>
   </details>
 
@@ -150,13 +155,15 @@ legend { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.1em; 
       <h2 id="resHead">Your stats</h2>
       <span class="small" id="resMeta"></span>
     </div>
-    <p class="small">Each card assumes you put a whole day's training into that one stat. Overdoses are counted (see the assumptions below); you can switch them off.</p>
+    <p class="small" id="gymLine"></p>
+    <p class="small">Each card answers for that stat, counting the gym progress each routine gives up. Overdoses are counted (see the assumptions below); you can switch them off.</p>
+    <div id="calc" class="banner" role="status" aria-live="polite" hidden>Calculating the long-run best move for every stat and booster. This takes a few seconds…</div>
     <div class="cards" id="cards"></div>
   </section>
 
   <section aria-labelledby="setupHead" style="display:flex;flex-direction:column;gap:12px">
     <h2 id="setupHead">Your setup</h2>
-    <p class="small">Filled in from your API data where possible. Change anything and the cards update. Gym dots and gym-gain perks only change stats per day and dollars per stat; they never change whether an ecstasy jump pays.</p>
+    <p class="small">Filled in from your API data where possible. Change anything and the cards update. Gym-gain perks only change stats per day and dollars per stat. Your gym and your progress through it decide how much gym progress is worth, and that does change whether an ecstasy jump pays.</p>
     <div class="setup" id="setup"></div>
   </section>
 
@@ -174,12 +181,16 @@ legend { font-family: var(--f-mono); font-size: 0.72rem; letter-spacing: 0.1em; 
   </section>
 </div>
 
-<script>
+<script id="engine">
 // ===== Jump model (port of model.py) =====
 const STAT_CONSTS = { strength: [1600, 1700], speed: [1600, 2000], dexterity: [1800, 1500], defense: [2100, -600] };
 const r4 = x => Math.floor(x * 10000 + 0.5) / 10000;
 
+// Energy mode: count energy trained instead of stats, through the same code (energy trained = gym XP).
+let ENERGY_MODE = false;
+function setEnergyMode(v) { ENERGY_MODE = v; }
 function trainGain(S, H, G, e, stat, mult) {
+  if (ENERGY_MODE) return e;
   const [A, B] = STAT_CONSTS[stat];
   S = Math.min(S, 5e7);
   H = Math.max(0, Math.min(H, 99999));
@@ -307,13 +318,121 @@ function crossover(f, g, lo = 1e3, hi = 5e7, steps = 60, tol = 2e-3) {
   return null;
 }
 
-if (typeof module !== "undefined") module.exports = { trainGain, defaultSetup, noJump, boosterJump, ecstasyJump, ecstasyBest, crossover, session };
 
+// ===== Gym-progress engine: fastest long-run route over (stat, gym XP) =====
+// Needs the model functions (noJump, boosterJump, ecstasyJump) and setEnergyMode in scope.
+// Standard gyms in unlock order: energy needed to unlock the NEXT gym (TornStats training guide).
+const GYM_NEXT_E = [200, 500, 1000, 2000, 2750, 3000, 3500, 4000, 6000, 7000, 8000, 11000, 12420, 18000, 18100, 24140, 31260, 36610, 46640, 56520, 67775, 84535, 106305];
+const GYM_UNLOCK = GYM_NEXT_E.reduce((a, e) => (a.push(a[a.length - 1] + e), a), [0]); // XP at which gym i (0-based) unlocks; 24 gyms
+const GYM_XP_MAX = GYM_UNLOCK[GYM_UNLOCK.length - 1];
 
+function jumpActions() {
+  const a = [{ kind: "std" }, { kind: "bj" }];
+  for (let N = 1; N <= 4; N++) for (let m = 0; m <= 4; m++) a.push({ kind: "ej", N, m });
+  return a;
+}
+function actionRate(a, S, b, st) {
+  const f = () => a.kind === "std" ? noJump(S, st) : a.kind === "bj" ? boosterJump(S, b, st) : ecstasyJump(S, b, a.N, st, a.m);
+  const s = f(); setEnergyMode(true); const e = f(); setEnergyMode(false);
+  return { stats: s.stats, energy: e.stats, cost: s.cost };
+}
+
+/* solveGym({ st, b, dots, xp0, S_lo, S_hi, BIN, XP_STEP })
+   st: model setup with G = 1 (perks in st.mult). dots[i]: this stat's dots at gym i (0 = can't train).
+   Minimises days to S_hi (far enough that every gym is unlocked first, so every future gym counts in full).
+   XP = energy trained. You always train at the best gym unlocked so far for this stat.
+   share: this stat's share of all energy (all stats run the same routine); XP still comes from all of it. */
+function solveGym({ st, b, dots, xp0 = 0, S_lo = 1e3, S_hi = 1e9, BIN = 50, XP_STEP = 500, share = 1, keepV = false }) {
+  const acts = jumpActions();
+  const x0 = Math.min(xp0, GYM_XP_MAX), NX = Math.max(1, Math.ceil((GYM_XP_MAX - x0) / XP_STEP) + 1);
+  const D = new Float64Array(NX);
+  for (let k = 0; k < NX; k++) {
+    const xp = x0 + k * XP_STEP; let best = 0;
+    for (let g = 0; g < GYM_UNLOCK.length && GYM_UNLOCK[g] <= xp + 1e-9; g++) best = Math.max(best, dots[g] || 0);
+    D[k] = best || 1e-9;
+  }
+  const i0 = Math.floor(Math.log(S_lo) * BIN), i1 = Math.ceil(Math.log(S_hi) * BIN), n = i1 - i0;
+  // Energy trained per day doesn't depend on the stat, so one pass per action. Stats per day are smooth
+  // in log(stat): evaluate on a coarse grid (RBIN per e-fold) and interpolate log-log.
+  const EN0 = acts.map(a => actionRate(a, 1e4, b, st).energy);
+  const RBIN = 8, r0 = Math.floor(Math.log(S_lo) * RBIN) - 1, r1 = Math.ceil(Math.log(S_hi) * RBIN) + 1;
+  const LR = [];
+  for (let r = r0; r <= r1; r++) {
+    const S = Math.exp(r / RBIN);
+    LR.push(acts.map(a => { const x = a.kind === "std" ? noJump(S, st) : a.kind === "bj" ? boosterJump(S, b, st) : ecstasyJump(S, b, a.N, st, a.m); return [Math.log(x.stats), Math.log(x.cost)]; }));
+  }
+  const Sg = new Float64Array(n), INV = [], EN = [], R = [];
+  for (let j = 0; j < n; j++) {
+    const i = i0 + j, S = Math.exp((i + 0.5) / BIN), dS = Math.exp((i + 1) / BIN) - Math.exp(i / BIN);
+    Sg[j] = S;
+    const u = Math.log(S) * RBIN - r0, u0 = Math.floor(u), w = u - u0;
+    const rr = acts.map((a, q) => ({ stats: Math.exp(LR[u0][q][0] * (1 - w) + LR[u0 + 1][q][0] * w), cost: Math.exp(LR[u0][q][1] * (1 - w) + LR[u0 + 1][q][1] * w), energy: EN0[q] }));
+    R.push(rr); INV.push(Float64Array.from(rr, r => dS / (r.stats * share))); EN.push(Float64Array.from(rr, r => r.energy / XP_STEP));
+  }
+  const A = new Array(n), VV = keepV ? new Array(n + 1) : null;
+  let next = new Float64Array(NX);
+  if (keepV) VV[n] = next;
+  for (let j = n - 1; j >= 0; j--) {
+    const v = new Float64Array(NX), a = new Uint8Array(NX), inv = INV[j], en = EN[j];
+    for (let k = 0; k < NX; k++) {
+      let best = Infinity, ba = 0;
+      const d = D[k];
+      for (let q = 0; q < inv.length; q++) {
+        const dt = inv[q] / d;
+        let x = k + en[q] * dt; if (x > NX - 1) x = NX - 1;
+        const k0 = x | 0, w = x - k0;
+        const val = dt + (k0 + 1 < NX ? next[k0] * (1 - w) + next[k0 + 1] * w : next[k0]);
+        if (val < best) { best = val; ba = q; }
+      }
+      v[k] = best; a[k] = ba;
+    }
+    A[j] = a; next = v; if (keepV) VV[j] = v;
+  }
+  const kOf = xp => Math.min(Math.max(Math.round((xp - x0) / XP_STEP), 0), NX - 1);
+  const jOf = S => Math.min(Math.max(Math.floor(Math.log(S) * BIN) - i0, 0), n - 1);
+  return {
+    acts, Sg, A, R, V: VV, kOf, jOf, x0, XP_STEP, BIN, i0,
+    actionAt(S, xp) { const j = jOf(S); return Object.assign({ rate: R[j][A[j][kOf(xp)]] }, acts[A[j][kOf(xp)]]); },
+    // Highest stat (at this gym XP, holding XP fixed) where an ecstasy jump is the best move; null = never.
+    ceilingAt(xp, Smin = 2e3) { const k = kOf(xp); let c = null; for (let j = 0; j < n; j++) if (Sg[j] >= Smin && acts[A[j][k]].kind === "ej") c = Math.exp((i0 + j + 1) / BIN); return c; },
+  };
+}
+
+// Worker entry: the page starts one worker per stat from this script's own source.
+if (typeof window === "undefined" && typeof self !== "undefined") {
+  self.onmessage = e => {
+    const { job, stat, st, S, xp, share, dots, boosters } = e.data;
+    const res = boosters.map(b => {
+      const sol = solveGym({ st, b, dots, xp0: xp, share });
+      const a = sol.actionAt(S, xp);
+      return { kind: a.kind, N: a.N, m: a.m, ceil: sol.ceilingAt(xp) };
+    });
+    self.postMessage({ job, stat, res });
+  };
+}
+</script>
+<script>
 // ===================== constants & state =====================
 const STATS = ["strength", "speed", "dexterity", "defense"];
 const LS_KEY = "hjc.apiKey", LS_SET = "hjc.settings";
 const ID_XAN = 206, ID_ECS = 197;
+// Standard gyms in unlock order with dots per stat (0 = can't train there). TornStats training guide;
+// replaced by /torn/gyms modifiers when a key loads. Unlock energy is GYM_NEXT_E in the engine.
+const GYM_LADDER = [
+  ["Premier Fitness", 2.0, 2.0, 2.0, 2.0], ["Average Joes", 2.4, 2.4, 2.8, 2.4], ["Woody's Workout", 2.8, 3.2, 3.0, 2.8],
+  ["Beach Bods", 3.2, 3.2, 3.2, 0], ["Silver Gym", 3.4, 3.6, 3.4, 3.2], ["Pour Femme", 3.4, 3.6, 3.6, 3.8],
+  ["Davies Den", 3.7, 0, 3.7, 3.7], ["Global Gym", 4.0, 4.0, 4.0, 4.0], ["Knuckle Heads", 4.8, 4.4, 4.0, 4.2],
+  ["Pioneer Fitness", 4.4, 4.6, 4.8, 4.4], ["Anabolic Anomalies", 5.0, 4.6, 5.2, 4.6], ["Core", 5.0, 5.2, 5.0, 5.0],
+  ["Racing Fitness", 5.0, 5.4, 4.8, 5.2], ["Complete Cardio", 5.5, 5.8, 5.5, 5.2], ["Legs, Bums and Tums", 0, 5.6, 5.6, 5.6],
+  ["Deep Burn", 6.0, 6.0, 6.0, 6.0], ["Apollo Gym", 6.0, 6.2, 6.4, 6.2], ["Gun Shop", 6.6, 6.4, 6.2, 6.2],
+  ["Force Training", 6.4, 6.6, 6.4, 6.8], ["Cha Cha's", 6.4, 6.4, 6.8, 7.0], ["Atlas", 7.0, 6.4, 6.4, 6.8],
+  ["Last Round", 7.0, 6.4, 7.0, 6.8], ["The Edge", 6.8, 7.0, 7.0, 6.8], ["George's", 7.3, 7.3, 7.3, 7.3],
+].map(([name, strength, speed, defense, dexterity]) => ({ name, dots: { strength, speed, defense, dexterity } }));
+const normName = s => String(s).toLowerCase().replace(/[^a-z]/g, "");
+function ladderIndex(name) {
+  const n = normName(name);
+  return GYM_LADDER.findIndex(g => { const m = normName(g.name); return n === m || n.startsWith(m); });
+}
 const store = {
   get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
@@ -323,7 +442,8 @@ const store = {
 // Built-in example (prices from item pages on 5 Oct 2026). Replaced by live data when a key loads.
 const EXAMPLE = {
   stats: { strength: 40000, speed: 90000, dexterity: 180000, defense: 600000 },
-  baseHappy: 5025, bar: 150, regenPerH: 30, gymName: "Deep Burn (example)", energyCost: 10,
+  baseHappy: 5025, bar: 150, regenPerH: 30, gymName: "Deep Burn (example)", energyCost: 10, gymIdx: 15,
+  gymDots: GYM_LADDER.map(g => Object.assign({}, g.dots)),
   dots: { strength: 6, speed: 6, dexterity: 6, defense: 6 },
   priceXan: 877066, priceEcs: 35281, pricePoint: 31097,
   boosters: [
@@ -344,7 +464,8 @@ let S = loadSettings();                       // user-adjustable assumptions
 let isExample = true;
 
 function loadSettings() {
-  const d = { odOn: true, pXan: 3, pEcs: 5, boosterCap: 24 };
+  // gymIdx: your override of the highest gym unlocked (null = from the API); build: your % per stat (null = from your stats).
+  const d = { odOn: true, pXan: 3, pEcs: 5, boosterCap: 24, gymIdx: null, gymPct: 50, build: null };
   try { return Object.assign(d, JSON.parse(store.get(LS_SET) || "{}")); } catch (e) { return d; }
 }
 const saveSettings = () => store.set(LS_SET, JSON.stringify(S));
@@ -434,6 +555,11 @@ async function loadLive(key) {
     next.regenPerH = bars.bars.energy.increment / bars.bars.energy.interval * 3600;
     const g = (gyms.gyms || []).find(x => x.id === gymRes.gym.id);
     if (g) { next.gymName = g.name; next.energyCost = g.energy_cost; STATS.forEach(s => next.dots[s] = g.modifiers[s] || 0); }
+    for (const x of gyms.gyms || []) { const i = ladderIndex(x.name); if (i >= 0) STATS.forEach(s => next.gymDots[i][s] = x.modifiers[s] || 0); }
+    // Highest standard gym unlocked: the active one, or George's for a specialist gym (they need George's first).
+    const li = g ? ladderIndex(g.name) : -1;
+    next.gymIdx = li >= 0 ? li : g && /jail/i.test(g.name) ? (S.gymIdx ?? EXAMPLE.gymIdx) : GYM_LADDER.length - 1;
+    if (S.gymIdx != null && S.gymIdx < next.gymIdx) S.gymIdx = null; // you've moved past your old override
     const pp = parsePerks(perksRes.perks);
     next.perks = pp.perks; next.candyBonus = pp.candyBonus; next.capExtra = pp.capExtra; next.perkNotes = pp.notes;
 
@@ -500,46 +626,66 @@ function boosterList() {
   return P.boosters.map(b => Object.assign({}, b, { happy: b.candy ? b.happy * mult : b.happy }));
 }
 
-function analyse(stat) {
+// ---- gym progress and build
+const gymIdxNow = () => Math.min(S.gymIdx ?? P.gymIdx, GYM_LADDER.length - 1);
+function xpNow() {
+  const i = gymIdxNow();
+  if (i >= GYM_LADDER.length - 1) return GYM_UNLOCK[GYM_LADDER.length - 1];
+  return GYM_UNLOCK[i] + Math.min(Math.max(S.gymPct, 0), 99.9) / 100 * GYM_NEXT_E[i];
+}
+function buildShares() {
+  const raw = S.build || Object.fromEntries(STATS.map(s => [s, P.stats[s]]));
+  const tot = STATS.reduce((a, s) => a + Math.max(0, raw[s] || 0), 0) || 1;
+  return Object.fromEntries(STATS.map(s => [s, Math.max(0, raw[s] || 0) / tot]));
+}
+
+// How spread your training is: 1 = one stat, 0.25 = all four equally (sum of squared shares). It sets how soon
+// the next gym arrives compared with how fast your stats grow; the engine treats every stat as moving in step.
+const buildSpread = () => STATS.reduce((a, s) => a + buildShares()[s] ** 2, 0);
+
+function moveRate(mv, S0, b, st) {
+  return mv.kind === "ej" ? ecstasyJump(S0, b, mv.N, st, mv.m) : mv.kind === "bj" ? boosterJump(S0, b, st) : noJump(S0, st);
+}
+// dp: per booster, the long-run best move at your stat and gym XP, plus how far the ecstasy pays at this gym XP.
+function analyse(stat, dp) {
   const st = setupFor(stat), Sv = P.stats[stat];
   const nj = noJump(Sv, st);
-  const rows = boosterList().map(b => {
-    const bj = Object.assign(boosterJump(Sv, b, st), { kind: "BJ" });
-    const ej = Object.assign(ecstasyBest(Sv, b, st), { kind: "EJ" });
-    const best = ej.stats > bj.stats ? ej : bj;
+  const rows = boosterList().map((b, i) => {
+    const mv = dp[i], best = Object.assign(moveRate(mv, Sv, b, st), { kind: mv.kind === "ej" ? "EJ" : mv.kind === "bj" ? "BJ" : "NJ", N: mv.N, m: mv.m });
     const extra = best.stats - nj.stats;
-    return { b, bj, ej, best, ecsWorks: ej.stats > bj.stats, extra, perExtra: extra > 0 ? (best.cost - nj.cost) / extra : Infinity, ceiling: undefined };
+    return { b, best, ecsWorks: mv.kind === "ej", extra, perExtra: extra > 0 ? (best.cost - nj.cost) / extra : Infinity, ceiling: mv.ceil };
   });
-  // lowest tier (least happy per jump) where the ecstasy still wins
+  // smallest booster (least happy per jump) whose ecstasy jump pays here
   const byHappy = [...rows].sort((a, b) => boostersPerJump(a.b, 24, st) * a.b.happy - boostersPerJump(b.b, 24, st) * b.b.happy);
   const lowest = byHappy.find(r => r.ecsWorks) || null;
   const value = rows.filter(r => isFinite(r.perExtra)).sort((a, b) => a.perExtra - b.perExtra)[0] || null;
-  const most = [...rows].sort((a, b) => b.best.stats - a.best.stats)[0];
-  return { stat, st, S: Sv, nj, rows, lowest, value, most, byHappy };
+  return { stat, st, S: Sv, nj, rows, lowest, value };
 }
 
 // ===================== rendering =====================
 const ICON_YES = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2 6.5l2.5 2.5L10 3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_NO = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 6h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
+const moveLabel = r => r.kind === "EJ" ? routineLabel(r) : r.kind === "BJ" ? "Booster jump" : "Standard train";
+const fmtCeil = (c, stat) => c == null ? "never" : `${c < 1e6 ? (c / 1e3).toFixed(1).replace(/\.0$/, "") + "k" : fmtK(c)}${stat ? " " + stat : ""}`;
 
 function cardHTML(A) {
   const noGym = !(P.dots[A.stat] > 0);
   const yes = !!A.lowest;
-  const ej = yes ? A.lowest.ej : null;
-  const q1 = yes ? `<span class="chip yes">${ICON_YES}Yes</span>` : `<span class="chip no">${ICON_NO}No</span>`;
+  const ej = yes ? A.lowest.best : null;
+  const q1 = yes ? `<span class="chip yes">${ICON_YES}Yes</span>` : `<span class="chip no">${ICON_NO}No</span> <span class="sub">Booster jumps instead: at your gym and stat level, no ecstasy jump makes up for the energy it gives up.</span>`;
   const q2 = yes ? esc(A.lowest.b.name) : `<span class="dim">—</span>`;
-  const q3 = yes ? `${ej.N} Xanax` : `<span class="dim">—</span>`;
-  const q4 = yes ? `<span class="dim" data-until="${A.stat}">…</span>` : `<span class="dim">—</span>`;
+  const q3 = yes ? `${ej.N} Xanax${ej.m ? `, plus ${ej.m} taken normally between jumps` : ""}` : `<span class="dim">—</span>`;
+  const q4 = yes ? fmtCeil(A.lowest.ceiling, A.stat) : `<span class="dim">—</span>`;
   const v = A.value;
 
-  const rowsHTML = A.rows.map((r, ri) => `<tr>
+  const rowsHTML = A.rows.map(r => `<tr>
       <td>${esc(r.b.name)} <span class="dim">(${fmtN(r.b.happy)})</span></td>
-      <td>${routineLabel(r.best)}</td>
+      <td>${moveLabel(r.best)}</td>
       <td>${noGym ? "—" : fmtN(r.best.stats)}</td>
       <td>+${(r.extra / A.nj.stats * 100).toFixed(1)}%</td>
       <td>${fmtUSD(r.best.cost)}</td>
       <td class="${v && r === v ? "best" : ""}">${noGym ? "—" : fmtUSD(r.perExtra)}</td>
-      <td data-ceil-cell="${A.stat}|${ri}" class="dim">…</td></tr>`).join("");
+      <td class="${r.ceiling && r.ceiling > A.S ? "" : "dim"}">${fmtCeil(r.ceiling)}</td></tr>`).join("");
 
   return `<article class="card" aria-label="${cap1(A.stat)}">
     <div class="card-head"><div><div class="eyebrow">${cap1(A.stat)}</div><div class="val">${fmtN(A.S)}</div></div></div>
@@ -550,44 +696,59 @@ function cardHTML(A) {
       <div class="answer"><div class="q">Stack</div><div class="a">${q3}</div></div>
     </div>
     <details><summary>All boosters for ${A.stat}</summary>
-      ${noGym ? `<p class="small" style="color:var(--err);margin-top:6px">Your current gym can't train ${A.stat}, so stats/day and costs need its dots set below. The answers above don't depend on the gym.</p>` : ""}
+      ${noGym ? `<p class="small" style="color:var(--err);margin-top:6px">Your current gym can't train ${A.stat}, so stats/day and costs need its dots set below. The answers above use the best gym you've unlocked for ${A.stat}.</p>` : ""}
       <div class="tablewrap"><table>
-        <thead><tr><th>Booster (happy)</th><th>Best routine</th><th>Stats/day</th><th>vs standard train</th><th>Cost/day</th><th>$ / extra stat</th><th>Ecstasy pays until</th></tr></thead>
+        <thead><tr><th>Booster (happy)</th><th>Best move</th><th>Stats/day</th><th>vs standard train</th><th>Cost/day</th><th>$ / extra stat</th><th>Ecstasy pays until</th></tr></thead>
         <tbody>${rowsHTML}</tbody>
       </table></div>
-      <p class="small" style="margin-top:6px">Standard train: ${noGym ? "—" : fmtN(A.nj.stats) + " stats/day at " + fmtUSD(A.nj.cost / A.nj.stats) + " per stat"}. “$ / extra stat” = extra cost ÷ extra stats compared with a standard train.</p>
+      <p class="small" style="margin-top:6px">Standard train: ${noGym ? "—" : fmtN(A.nj.stats) + " stats/day at " + fmtUSD(A.nj.cost / A.nj.stats) + " per stat"}. “Best move” counts the gym progress each routine gives up; stats and costs per day are today's. “Ecstasy pays until” holds your gym progress where it is now.</p>
     </details>
   </article>`;
 }
 
-let ceilJob = 0;
+// ===================== the long-run engine, one worker per stat =====================
+let pool = null, job = 0;
+function makePool() {
+  try {
+    const url = URL.createObjectURL(new Blob([$("engine").textContent], { type: "text/javascript" }));
+    return STATS.map(() => new Worker(url));
+  } catch (e) { return null; }
+}
+function jobFor(stat) {
+  const st = Object.assign(setupFor(stat), { G: 1 });
+  return { stat, st, S: P.stats[stat], xp: xpNow(), share: buildSpread(), dots: P.gymDots.map(d => d[stat] || 0), boosters: boosterList() };
+}
+function solveLocal(m) {
+  return m.boosters.map(b => { const sol = solveGym({ st: m.st, b, dots: m.dots, xp0: m.xp, share: m.share }); const a = sol.actionAt(m.S, m.xp); return { kind: a.kind, N: a.N, m: a.m, ceil: sol.ceilingAt(m.xp) }; });
+}
+function gymLine() {
+  const i = gymIdxNow(), g = GYM_LADDER[i];
+  const sh = buildShares();
+  const prog = i >= GYM_LADDER.length - 1 ? "every gym unlocked, so gym progress no longer counts" : `${Math.round(S.gymPct)}% of the way to ${GYM_LADDER[i + 1].name}`;
+  return `Gym: ${g.name}, ${prog}. Build: ${STATS.map(s => `${cap1(s)} ${Math.round(sh[s] * 100)}%`).join(" · ")} (trains like ${(1 / buildSpread()).toFixed(1)} equal stats).`;
+}
 function recompute() {
-  const analyses = STATS.map(analyse);
-  $("cards").innerHTML = analyses.map(cardHTML).join("");
-  // ceilings are slower; fill them in after paint, one stat at a time
-  const job = ++ceilJob;
-  const queue = [];
-  analyses.forEach(A => { if (A.lowest) queue.push([A, A.lowest, -1]); });
-  analyses.forEach(A => A.rows.forEach((r, ri) => queue.push([A, r, ri])));
-  (function step() {
-    if (job !== ceilJob || !queue.length) return;
-    const t0 = performance.now();
-    while (queue.length && performance.now() - t0 < 30) {
-      const [A, r, ri] = queue.shift();
-      const st = A.st, b = r.b;
-      if (ri === -1) {
-        const u = crossover(x => ecstasyBest(x, b, st).stats, x => boosterJump(x, b, st).stats, Math.max(1e3, A.S));
-        const el = document.querySelector(`[data-until="${A.stat}"]`);
-        if (el) { el.textContent = `${u && u < 1e6 ? (u / 1e3).toFixed(1).replace(/\.0$/, "") + "k" : fmtK(u)} ${A.stat}`; el.className = ""; }
-        continue;
-      }
-      const c = crossover(x => ecstasyBest(x, b, st).stats, x => boosterJump(x, b, st).stats);
-      const key = `${A.stat}|${ri}`;
-      const cell = document.querySelector(`[data-ceil-cell="${CSS.escape(key)}"]`);
-      if (cell) { cell.textContent = c === 0 ? "never" : fmtK(c); cell.className = c && c > A.S ? "" : "dim"; }
-    }
-    setTimeout(step, 0);
-  })();
+  const my = ++job;
+  $("calc").hidden = false; $("cards").hidden = true; $("gymLine").textContent = gymLine();
+  const results = {};
+  const done = () => {
+    if (my !== job) return;
+    $("cards").innerHTML = STATS.map(s => cardHTML(analyse(s, results[s]))).join("");
+    $("calc").hidden = true; $("cards").hidden = false;
+  };
+  const msgs = STATS.map(s => Object.assign(jobFor(s), { job: my }));
+  if (pool) { pool.forEach(w => w.terminate()); pool = null; } // drop any half-finished job
+  pool = makePool();
+  if (!pool) { // no workers available: solve here, one stat per tick
+    (function step(i) { if (my !== job) return; if (i === msgs.length) return done(); results[msgs[i].stat] = solveLocal(msgs[i]); setTimeout(() => step(i + 1), 0); })(0);
+    return;
+  }
+  let left = msgs.length;
+  pool.forEach((w, i) => {
+    w.onmessage = e => { if (e.data.job !== my) return; results[e.data.stat] = e.data.res; if (--left === 0) done(); };
+    w.onerror = () => { if (my !== job) return; results[msgs[i].stat] = solveLocal(msgs[i]); if (--left === 0) done(); };
+    w.postMessage(msgs[i]);
+  });
 }
 
 function field(id, label, value, opts = {}) {
@@ -598,6 +759,9 @@ function renderSetup() {
   const dotsF = STATS.map(s => field("dot_" + s, cap1(s) + " dots", P.dots[s], { step: 0.1 })).join("");
   const perkF = [field("pk_general", "All stats", P.perks.general, { step: 0.5 }), ...STATS.map(s => field("pk_" + s, cap1(s), P.perks[s], { step: 0.5 }))].join("");
   const boostF = P.boosters.map((b, i) => field("bp_" + i, `${esc(b.name)} (${fmtN(b.happy)})`, Math.round(b.price), { step: 1 })).join("");
+  const gi = gymIdxNow(), sh = buildShares();
+  const gymOpts = GYM_LADDER.map((g, i) => `<option value="${i}"${i === gi ? " selected" : ""}>${esc(g.name)}</option>`).join("");
+  const buildF = STATS.map(s => field("bd_" + s, cap1(s), +(sh[s] * 100).toFixed(1), { step: 1 })).join("");
   $("setup").innerHTML = `
     <fieldset><legend>Battle stats</legend>${statsF}</fieldset>
     <fieldset><legend>Happy &amp; energy</legend>
@@ -606,6 +770,15 @@ function renderSetup() {
       ${field("regen", "Energy regen per hour", P.regenPerH, { step: 1 })}
       ${field("boosterCap", "Booster cooldown cap (h)", S.boosterCap + (P.capExtra || 0), { step: 1 })}
       ${field("candyBonus", "Candy happy bonus (%)", P.candyBonus, { step: 1 })}
+    </fieldset>
+    <fieldset><legend>Gym progress</legend>
+      <div class="field"><label for="gymIdx">Highest gym unlocked</label><select id="gymIdx">${gymOpts}</select></div>
+      ${field("gymPct", "Progress to the next gym (%)", S.gymPct, { step: 1 })}
+      <p class="small">Read the percentage off your gym page. The API shows which gym you're in but not your progress. Saved in this browser.</p>
+    </fieldset>
+    <fieldset><legend>Build (% of your training)</legend>${buildF}
+      <button id="btnBuild" type="button">Match my stats</button>
+      <p class="small">${S.build ? "Your own split, saved in this browser." : "Taken from your current stats."} The more evenly you spread training, the sooner the next gym comes compared with how fast each stat grows, so below Knuckle Heads ecstasy jumps pay less. From Knuckle Heads up the build makes no difference.</p>
     </fieldset>
     <fieldset><legend>Gym · ${esc(P.gymName)}</legend>${dotsF}${field("ecost", "Energy per train", P.energyCost, { step: 5 })}</fieldset>
     <fieldset><legend>Gym gain perks (%)</legend>${perkF}
@@ -622,7 +795,8 @@ function renderSetup() {
       ${field("pricePoint", "Point (refill = 30)", Math.round(P.pricePoint), { step: 1 })}
       ${boostF}
     </fieldset>`;
-  $("setup").querySelectorAll("input").forEach(inp => inp.addEventListener("change", onSetupChange));
+  $("setup").querySelectorAll("input, select").forEach(inp => inp.addEventListener("change", onSetupChange));
+  $("btnBuild").addEventListener("click", () => { S.build = null; saveSettings(); renderSetup(); recompute(); });
 }
 function num(id, fallback) { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : fallback; }
 function onSetupChange() {
@@ -637,7 +811,12 @@ function onSetupChange() {
   S.odOn = $("odOn").checked; S.pXan = Math.min(100, num("pXan", S.pXan)); S.pEcs = Math.min(100, num("pEcs", S.pEcs));
   P.priceXan = num("priceXan", P.priceXan); P.priceEcs = num("priceEcs", P.priceEcs); P.pricePoint = num("pricePoint", P.pricePoint);
   P.boosters.forEach((b, i) => b.price = num("bp_" + i, b.price));
-  saveSettings(); recompute();
+  const gi = +$("gymIdx").value;
+  S.gymIdx = gi === P.gymIdx ? null : gi;
+  S.gymPct = Math.min(100, num("gymPct", S.gymPct));
+  const sh = buildShares(), bd = Object.fromEntries(STATS.map(s => [s, num("bd_" + s, sh[s] * 100)]));
+  if (STATS.some(s => Math.abs(bd[s] - +(sh[s] * 100).toFixed(1)) > 0.05)) S.build = bd;
+  saveSettings(); renderSetup(); recompute();
 }
 
 // ===================== key panel =====================
